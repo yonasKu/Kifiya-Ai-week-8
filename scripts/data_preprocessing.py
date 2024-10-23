@@ -18,12 +18,15 @@ def data_overview(df):
     print(f"\nNumber of duplicate rows: {df.duplicated().sum()}")
 
 # Function to standardize numerical features
-def standardize_numerical_features(df):
+from sklearn.preprocessing import StandardScaler
+
+def standardize_numerical_features(df, exclude_columns=None):
     """
     Standardize numerical features in the DataFrame.
     
     Parameters:
     - df (pd.DataFrame): DataFrame containing numerical features to be standardized.
+    - exclude_columns (list): List of columns to exclude from scaling (e.g., categorical or label columns).
     
     Returns:
     - df (pd.DataFrame): DataFrame with standardized numerical features.
@@ -33,6 +36,10 @@ def standardize_numerical_features(df):
 
     # Identify numerical columns
     numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+
+    # Exclude specific columns (like device_id, browser, class, etc.)
+    if exclude_columns:
+        numeric_columns = [col for col in numeric_columns if col not in exclude_columns]
 
     # Check if there are any numerical columns to scale
     if numeric_columns:
