@@ -1,70 +1,105 @@
-# src/api.py
-from flask import Flask, request, jsonify
-import joblib
-import numpy as np
+import joblib  # Make sure you import joblib
 import pandas as pd
-import os
+import logging
+from flask import Flask, request, jsonify
 
+# Initialize the Flask application
 app = Flask(__name__)
 
-# Paths to the pre-trained models and data file
-credit_model_path = os.path.join('model', 'Credit Card Fraud Detection with Random Forest_random_forest_model.pkl')
-fraud_model_path = os.path.join('model', 'Fraud Detection with Random Forest_random_forest_model.pkl')
-data_file_path = os.path.join(os.path.dirname(__file__), '../data/Fraud_Data.csv')  # Update the file name if needed
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Load the pre-trained models
-credit_model = joblib.load(credit_model_path)
-fraud_model = joblib.load(fraud_model_path)
+# Load the first model
+model_path_1 = 'model/Credit Card Fraud Detection with Random Forest_random_forest_model.pkl'
+try:
+    model_1 = joblib.load(model_path_1)  # Use joblib to load the model
+    logger.info("Model 1 loaded successfully.")
+    logger.info(f"Model 1 type: {type(model_1)}")  # Log the type of the model
 
-# Load fraud data for insights
-fraud_data_df = pd.read_csv(data_file_path)
+    # Check if model_1 is a valid model
+    if not hasattr(model_1, 'predict'):
+        logger.error("Model 1 is not a valid model object.")
+except Exception as e:
+    logger.error(f"Error loading Model 1: {e}")
+    model_1 = None  # Set to None if loading fails
 
-@app.route('/')
-def home():
-    return "Fraud Detection API is running!"
+# Load the second model
+model_path_2 = 'model/Fraud Detection with Random Forest_random_forest_model.pkl'
+try:
+    model_2 = joblib.load(model_path_2)  # Use joblib to load the model
+    logger.info("Model 2 loaded successfully.")
+    logger.info(f"Model 2 type: {type(model_2)}")  # Log the type of the model
 
-# Endpoint for predicting credit card fraud
-@app.route('/predict_credit_fraud', methods=['POST'])
-def predict_credit_fraud():
-    data = request.get_json(force=True)
-    features = np.array(data['features']).reshape(1, -1)
-    prediction = credit_model.predict(features)
-    return jsonify({"prediction": int(prediction[0])})
+    # Check if model_2 is a valid model
+    if not hasattr(model_2, 'predict'):
+        logger.error("Model 2 is not a valid model object.")
+except Exception as e:
+    logger.error(f"Error loading Model 2: {e}")
+    model_2 = None  # Set to None if loading fails
 
-# Endpoint for predicting general fraud
-@app.route('/predict_fraud', methods=['POST'])
-def predict_fraud():
-    data = request.get_json(force=True)
-    features = np.array(data['features']).reshape(1, -1)
-    prediction = fraud_model.predict(features)
-    return jsonify({"prediction": int(prediction[0])})
+# Helper function to ensure input data has required columns
+def validate_input(data, model):
+    if model is None:
+        return False, "Model is not loaded."
+    
+    # You should replace these with the actual feature names your model expects
+    required_columns = [f'V{i}' for i in range(1, 30)] + ['Time']  # Adjust as necessary
+    if set(required_columns).issubset(data.keys()):
+        return True, None
+    else:
+        missing_cols = set(required_columns) - set(data.keys())
+        return False, f"Missing columns: {missing_cols}"
 
-# Endpoint for fraud statistics
-@app.route('/api/stats', methods=['GET'])
-def get_fraud_stats():
-    total_transactions = len(fraud_data_df)
-    total_frauds = fraud_data_df['fraud_class'].sum()
-    fraud_percentage = (total_frauds / total_transactions) * 100 if total_transactions > 0 else 0
+# Define a route for predictions using the first model
+@app.route('/predict/model1', methods=['POST'])
+def predict_model1():
+    # Get data from the request
+    data = request.get_json()
+    
+    # Validate input data
+    is_valid, error_msg = validate_input(data, model_1)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
 
-    return jsonify({
-        'total_transactions': total_transactions,
-        'total_frauds': total_frauds,
-        'fraud_percentage': fraud_percentage
-    })
+    # Ensure the data is in the correct format
+    input_df = pd.DataFrame([data])  # Wrap data in a list to ensure it is treated as a single row
 
-# Endpoint for daily fraud trends
-@app.route('/api/fraud_trends', methods=['GET'])
-def get_fraud_trends():
-    fraud_data_df['purchase_time'] = pd.to_datetime(fraud_data_df['purchase_time'])
-    fraud_trends = fraud_data_df.groupby(fraud_data_df['purchase_time'].dt.date).agg({'fraud_class': 'sum'}).reset_index()
-    fraud_trends.columns = ['date', 'fraud_cases']
-    return fraud_trends.to_json(orient='records')
+    # Make predictions using the first model
+    try:
+        predictions = model_1.predict(input_df)
+        logger.info("Prediction made using Model 1.")
+    except Exception as e:
+        logger.error(f"Error making prediction with Model 1: {e}")
+        return jsonify({'error': str(e)}), 500
 
-# Endpoint for fraud cases by device
-@app.route('/api/device_fraud', methods=['GET'])
-def get_device_fraud():
-    device_fraud = fraud_data_df.groupby('device_id')['fraud_class'].sum().reset_index()
-    return device_fraud.to_json(orient='records')
+    # Return predictions as a JSON response
+    return jsonify(predictions.tolist())
+
+# Define a route for predictions using the second model
+@app.route('/predict/model2', methods=['POST'])
+def predict_model2():
+    # Get data from the request
+    data = request.get_json()
+
+    # Validate input data
+    is_valid, error_msg = validate_input(data, model_2)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
+
+    # Ensure the data is in the correct format
+    input_df = pd.DataFrame([data])  # Wrap data in a list to ensure it is treated as a single row
+
+    # Make predictions using the second model
+    try:
+        predictions = model_2.predict(input_df)
+        logger.info("Prediction made using Model 2.")
+    except Exception as e:
+        logger.error(f"Error making prediction with Model 2: {e}")
+        return jsonify({'error': str(e)}), 500
+
+    # Return predictions as a JSON response
+    return jsonify(predictions.tolist())
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
