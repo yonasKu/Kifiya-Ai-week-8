@@ -1,7 +1,4 @@
 myvenv
 data/*
 .env
-<<<<<<< HEAD
-=======
 model/*
->>>>>>> b5b138bb1be014e753788ae4e009334e3ab00daf
