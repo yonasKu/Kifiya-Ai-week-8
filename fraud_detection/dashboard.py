@@ -14,7 +14,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load fraud data
-data_path = '../data/Fraud_Data.csv'  # Adjust the path as necessary
+#data_path = '../data/Fraud_Data.csv'  # Adjust the path as necessary
+data_path = '../data/fraud_datas.csv'  # Adjust the path as necessary
 df = pd.read_csv(data_path)
 
 # Ensure 'signup_time' and 'purchase_time' are in datetime format
@@ -121,6 +122,7 @@ app = Dash(__name__, server=server, suppress_callback_exceptions=True)
 app.layout = html.Div([
     html.H1("Fraud Insights Dashboard"),
     html.Div(id='summary-boxes', style={'display': 'flex', 'justify-content': 'space-around'}),
+    dcc.Graph(id='fraud-geography-chart'),
     dcc.Graph(id='fraud-trend-chart'),
     dcc.Graph(id='fraud-by-sex-chart'),
     dcc.Graph(id='fraud-by-age-chart'),
@@ -240,6 +242,17 @@ def update_daily_fraud_chart(_):
     daily_counts = df[df['class'] == 1]['purchase_time'].dt.day.value_counts().sort_index()
     fig = px.bar(daily_counts, x=daily_counts.index, y=daily_counts.values, title='Fraud Cases by Day of Month')
     fig.update_layout(xaxis_title='Day of Month', yaxis_title='Fraud Cases')
+    return fig
+
+# Callback to update fraud by geography chart
+@app.callback(
+    dd.Output('fraud-geography-chart', 'figure'),
+    [dd.Input('summary-boxes', 'children')]
+)
+def update_fraud_geography_chart(_):
+    fraud_geo = df[df['class'] == 1]['country'].value_counts().reset_index()
+    fraud_geo.columns = ['Country', 'Fraud Cases']
+    fig = px.choropleth(fraud_geo, locations='Country', locationmode='country names', color='Fraud Cases', title='Geographic Distribution of Fraud Cases')
     return fig
 
 
