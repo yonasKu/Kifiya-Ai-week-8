@@ -14,14 +14,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load fraud data
-data_path = 'data/Fraud_Data.csv'  # Adjust the path as necessary
+data_path = '../data/Fraud_Data.csv'  # Adjust the path as necessary
 df = pd.read_csv(data_path)
 
 # Ensure 'signup_time' and 'purchase_time' are in datetime format
 df['signup_time'] = pd.to_datetime(df['signup_time'], errors='coerce')
 df['purchase_time'] = pd.to_datetime(df['purchase_time'], errors='coerce')
 
-# Calculate transaction_frequency and transaction_velocity for the entire dataset
+# Calculate transaction frequency and transaction velocity for the entire dataset
 df['transaction_frequency'] = (df['purchase_time'] - df['signup_time']).dt.days / 30  # Monthly frequency
 df['transaction_velocity'] = df['purchase_value'] / df['transaction_frequency'].replace(0, 1)  # Avoid division by zero
 
@@ -117,6 +117,7 @@ def predict_general_fraud():
 # Initialize Dash app
 app = Dash(__name__, server=server, suppress_callback_exceptions=True)
 
+# Layout for the dashboard
 app.layout = html.Div([
     html.H1("Fraud Insights Dashboard"),
     html.Div(id='summary-boxes', style={'display': 'flex', 'justify-content': 'space-around'}),
@@ -129,11 +130,7 @@ app.layout = html.Div([
     dcc.Graph(id='daily-fraud-chart'),   # New: Fraud by day
     dcc.Graph(id='frequency-distribution-chart'),  # New: Transaction Frequency
     dcc.Graph(id='velocity-distribution-chart'),   # New: Transaction Velocity
-    dcc.Graph(id='device-browser-comparison-chart'), # New: Device and Browser Comparison
-
-    dcc.Graph(id='device-fraud-comparison-chart'),  # New: Device Comparison
-    dcc.Graph(id='browser-fraud-comparison-chart'),  # New: Browser Comparison
-])
+   ])
 
 # Callback to update summary boxes
 @app.callback(
@@ -143,18 +140,9 @@ app.layout = html.Div([
 def update_summary_boxes(_):
     summary_stats = get_summary_statistics()
     return [
-        html.Div([
-            html.H3("Total Transactions"),
-            html.P(str(summary_stats['total_transactions']))
-        ]),
-        html.Div([
-            html.H3("Total Fraud Cases"),
-            html.P(str(summary_stats['total_fraud_cases']))
-        ]),
-        html.Div([
-            html.H3("Fraud Percentage"),
-            html.P(f"{summary_stats['fraud_percentage']:.2f}%")
-        ]),
+        html.Div([html.H3("Total Transactions"), html.P(str(summary_stats['total_transactions']))]),
+        html.Div([html.H3("Total Fraud Cases"), html.P(str(summary_stats['total_fraud_cases']))]),
+        html.Div([html.H3("Fraud Percentage"), html.P(f"{summary_stats['fraud_percentage']:.2f}%")]),
     ]
 
 # Callback to update fraud trend chart
@@ -167,28 +155,6 @@ def update_fraud_trend_chart(_):
     trends['signup_time'] = trends['signup_time'].astype(str)
     trends.columns = ['Month', 'Fraud Cases']
     fig = px.line(trends, x='Month', y='Fraud Cases', title='Fraud Cases Over Time')
-    return fig
-
-# Callback to update fraud by device chart
-@app.callback(
-    dd.Output('device-fraud-chart', 'figure'),
-    [dd.Input('summary-boxes', 'children')]
-)
-def update_device_fraud_chart(_):
-    device_counts = df[df['class'] == 1]['device_id'].value_counts().reset_index()
-    device_counts.columns = ['Device', 'Fraud Cases']
-    fig = px.bar(device_counts, x='Device', y='Fraud Cases', title='Fraud Cases by Device')
-    return fig
-
-# Callback to update fraud by browser chart
-@app.callback(
-    dd.Output('browser-fraud-chart', 'figure'),
-    [dd.Input('summary-boxes', 'children')]
-)
-def update_browser_fraud_chart(_):
-    browser_counts = df[df['class'] == 1]['browser'].value_counts().reset_index()
-    browser_counts.columns = ['Browser', 'Fraud Cases']
-    fig = px.bar(browser_counts, x='Browser', y='Fraud Cases', title='Fraud Cases by Browser')
     return fig
 
 # Callback to update fraud by sex chart
@@ -232,98 +198,50 @@ def update_velocity_distribution_chart(_):
     fig.update_layout(xaxis_title='Transaction Velocity', yaxis_title='Count')
     return fig
 
-# New Callback to update daily fraud chart
+# Callback to update device-fraud chart
 @app.callback(
-    dd.Output('daily-fraud-chart', 'figure'),
+    dd.Output('device-fraud-chart', 'figure'),
     [dd.Input('summary-boxes', 'children')]
 )
-def update_daily_fraud_chart(_):
-    daily_counts = df[df['class'] == 1].groupby(df['purchase_time'].dt.dayofweek).size().reset_index(name='Fraud Cases')
-    fig = px.bar(daily_counts, x='purchase_time', y='Fraud Cases', title='Fraud Cases by Day of Week')
-    fig.update_layout(xaxis_title='Day of Week', yaxis_title='Fraud Cases')
+def update_device_fraud_chart(_):
+    device_counts = df[df['class'] == 1]['device_id'].value_counts().reset_index()
+    device_counts.columns = ['Device', 'Fraud Cases']
+    fig = px.bar(device_counts, x='Device', y='Fraud Cases', title='Fraud Cases by Device')
     return fig
 
-# New Callback to update hourly fraud chart
+# Callback to update browser-fraud chart
+@app.callback(
+    dd.Output('browser-fraud-chart', 'figure'),
+    [dd.Input('summary-boxes', 'children')]
+)
+def update_browser_fraud_chart(_):
+    browser_counts = df[df['class'] == 1]['browser'].value_counts().reset_index()
+    browser_counts.columns = ['Browser', 'Fraud Cases']
+    fig = px.bar(browser_counts, x='Browser', y='Fraud Cases', title='Fraud Cases by Browser')
+    return fig
+
+# Callback to update hourly fraud chart
 @app.callback(
     dd.Output('hourly-fraud-chart', 'figure'),
     [dd.Input('summary-boxes', 'children')]
 )
 def update_hourly_fraud_chart(_):
-    hourly_counts = df[df['class'] == 1].groupby(df['purchase_time'].dt.hour).size().reset_index(name='Fraud Cases')
-    fig = px.bar(hourly_counts, x='purchase_time', y='Fraud Cases', title='Fraud Cases by Hour')
+    hourly_counts = df[df['class'] == 1]['purchase_time'].dt.hour.value_counts().sort_index()
+    fig = px.bar(hourly_counts, x=hourly_counts.index, y=hourly_counts.values, title='Fraud Cases by Hour of Day')
     fig.update_layout(xaxis_title='Hour of Day', yaxis_title='Fraud Cases')
     return fig
 
-
-# New Callback to update device and browser comparison chart
+# Callback to update daily fraud chart
 @app.callback(
-    dd.Output('device-browser-comparison-chart', 'figure'),
+    dd.Output('daily-fraud-chart', 'figure'),
     [dd.Input('summary-boxes', 'children')]
 )
-def update_device_browser_comparison_chart(_):
-    # Count fraud cases by device
-    device_counts = df[df['class'] == 1]['device_id'].value_counts().reset_index()
-    device_counts.columns = ['Device', 'Fraud Cases']
-    
-    # Count fraud cases by browser
-    browser_counts = df[df['class'] == 1]['browser'].value_counts().reset_index()
-    browser_counts.columns = ['Browser', 'Fraud Cases']
-    
-    # Combine data for plotting
-    device_counts['Type'] = 'Device'
-    browser_counts['Type'] = 'Browser'
-    
-    combined_counts = pd.concat([device_counts, browser_counts])
-    
-    # Create a bar chart
-    fig = px.bar(combined_counts, 
-                 x='Fraud Cases', 
-                 y=combined_counts['Device'].combine_first(combined_counts['Browser']), 
-                 color='Type', 
-                 title='Fraud Cases by Device and Browser',
-                 labels={'y': 'Device/Browser', 'Fraud Cases': 'Number of Fraud Cases'})
-    
+def update_daily_fraud_chart(_):
+    daily_counts = df[df['class'] == 1]['purchase_time'].dt.day.value_counts().sort_index()
+    fig = px.bar(daily_counts, x=daily_counts.index, y=daily_counts.values, title='Fraud Cases by Day of Month')
+    fig.update_layout(xaxis_title='Day of Month', yaxis_title='Fraud Cases')
     return fig
 
-# Callback to update device fraud cases chart
-@app.callback(
-    dd.Output('device-fraud-comparison-chart', 'figure'),
-    [dd.Input('summary-boxes', 'children')]
-)
-def update_device_fraud_chart(_):
-    # Count fraud cases by device
-    device_counts = df[df['class'] == 1]['device_id'].value_counts().reset_index()
-    device_counts.columns = ['Device', 'Fraud Cases']
-
-    # Create a bar chart for devices
-    fig = px.bar(device_counts,
-                 x='Device',
-                 y='Fraud Cases',
-                 title='Fraud Cases by Device',
-                 labels={'Device': 'Device ID', 'Fraud Cases': 'Number of Fraud Cases'},
-                 color='Fraud Cases')  # Color by number of fraud cases for better visibility
-
-    return fig
-
-# Callback to update browser fraud cases chart
-@app.callback(
-    dd.Output('browser-fraud-comparison-chart', 'figure'),
-    [dd.Input('summary-boxes', 'children')]
-)
-def update_browser_fraud_chart(_):
-    # Count fraud cases by browser
-    browser_counts = df[df['class'] == 1]['browser'].value_counts().reset_index()
-    browser_counts.columns = ['Browser', 'Fraud Cases']
-
-    # Create a bar chart for browsers
-    fig = px.bar(browser_counts,
-                 x='Browser',
-                 y='Fraud Cases',
-                 title='Fraud Cases by Browser',
-                 labels={'Browser': 'Browser', 'Fraud Cases': 'Number of Fraud Cases'},
-                 color='Fraud Cases')  # Color by number of fraud cases for better visibility
-r
-    return fig
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    server.run(debug=True)
